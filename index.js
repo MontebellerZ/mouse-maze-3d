@@ -43,8 +43,8 @@ function setScene(centerCoord) {
     window.addEventListener("resize", onWindowResize, false);
 
     const fov = 90;
-    const aspect = 1920 / 1080;
-    const near = 1.0;
+    const aspect = window.innerWidth / window.innerHeight;
+    const near = 0.1;
     const far = 1000.0;
 
     camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
