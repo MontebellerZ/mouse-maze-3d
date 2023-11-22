@@ -13,8 +13,26 @@ const wallThin = 0.1;
 const wallThick = 1 + wallThin;
 const wallHeight = 1;
 
-const WALL_MATERIAL = new THREE.MeshStandardMaterial({ color: 0xfafafa }); // Gray color for walls
-const FLOOR_MATERIAL = new THREE.MeshStandardMaterial({ color: 0xc9a771, side: THREE.DoubleSide }); // Yellowwish color for floors
+const FLOOR_TEXTURE = new THREE.TextureLoader().load("./resources/textures/wall2.jpg");
+FLOOR_TEXTURE.wrapS = FLOOR_TEXTURE.wrapT = THREE.RepeatWrapping;
+FLOOR_TEXTURE.anisotropy = 16;
+FLOOR_TEXTURE.colorSpace = THREE.SRGBColorSpace;
+FLOOR_TEXTURE.repeat.set(10, 10);
+
+const WALL_TEXTURE = new THREE.TextureLoader().load("./resources/textures/wall1.jpg");
+WALL_TEXTURE.wrapS = WALL_TEXTURE.wrapT = THREE.RepeatWrapping;
+WALL_TEXTURE.anisotropy = 16;
+WALL_TEXTURE.colorSpace = THREE.SRGBColorSpace;
+
+const WALL_MATERIAL = new THREE.MeshStandardMaterial({
+	// color: 0xfafafa,
+	map: WALL_TEXTURE,
+}); // Gray color for walls
+const FLOOR_MATERIAL = new THREE.MeshStandardMaterial({
+	// color: 0xc9a771,
+	side: THREE.DoubleSide,
+	map: FLOOR_TEXTURE,
+}); // Yellowwish color for floors
 
 function render() {
 	requestAnimationFrame(() => {
@@ -104,27 +122,13 @@ function setLights() {
 
 function setFloors(dificulty, center, material) {
 	const width = dificulty + 3;
-	// const geometry = new THREE.PlaneGeometry(width, width, 10, 10);
-	// const plane = new THREE.Mesh(geometry, material || FLOOR_MATERIAL);
-	// plane.castShadow = false;
-	// plane.receiveShadow = true;
-	// plane.rotation.x = -Math.PI / 2;
-	// plane.position.set(center, 0, center);
-	// scene.add(plane);
-
-	var groundTexture = new THREE.TextureLoader().load("./resources/textures/floor1.jpg");
-	groundTexture.wrapS = groundTexture.wrapT = THREE.RepeatWrapping;
-	groundTexture.repeat.set(10000, 10000);
-	groundTexture.anisotropy = 16;
-	groundTexture.encoding = THREE.SRGBColorSpace;
-
-	var groundMaterial = new THREE.MeshStandardMaterial({ map: groundTexture });
-
-	var mesh = new THREE.Mesh(new THREE.PlaneBufferGeometry(10000, 10000), groundMaterial);
-	mesh.position.y = 0.0;
-	mesh.rotation.x = -Math.PI / 2;
-	mesh.receiveShadow = true;
-	scene.add(mesh);
+	const geometry = new THREE.PlaneGeometry(width, width, 10, 10);
+	const plane = new THREE.Mesh(geometry, material || FLOOR_MATERIAL);
+	plane.castShadow = false;
+	plane.receiveShadow = true;
+	plane.rotation.x = -Math.PI / 2;
+	plane.position.set(center, 0, center);
+	scene.add(plane);
 }
 
 function setBackground() {
