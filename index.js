@@ -1,6 +1,6 @@
 import * as THREE from "./js/three.module.js";
-import { OrbitControls } from "./js/OrbitControls.js";
 import { generateMaze } from "./maze.js";
+import { PointerLockControls } from "./js/PointerLockControls.js";
 
 /** @type {THREE.Scene} */
 var scene;
@@ -8,6 +8,8 @@ var scene;
 var camera;
 /** @type {THREE.WebGLRenderer} */
 var renderer;
+/** @type {PointerLockControls} */
+var controls;
 
 const wallThin = 0.1;
 const wallThick = 1 + wallThin;
@@ -30,11 +32,25 @@ const FLOOR_MATERIAL = new THREE.MeshStandardMaterial({
     map: FLOOR_TEXTURE,
 });
 
-function render() {
-    requestAnimationFrame(() => {
-        renderer.render(scene, camera);
-        render();
-    });
+// player movement variables
+var moveForward = false;
+var moveBackward = false;
+var moveLeft = false;
+var moveRight = false;
+
+var prevTime = performance.now();
+
+const velocity = new THREE.Vector3(); // movement of camera/player
+const direction = new THREE.Vector3(); // direction of camera/player
+const speed = 10;
+const moveSpeed = 10;
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    movementUpdate();
+
+    renderer.render(scene, camera);
 }
 
 function onWindowResize() {
@@ -43,7 +59,7 @@ function onWindowResize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-function setScene(centerCoord) {
+function setScene() {
     scene = new THREE.Scene();
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -55,18 +71,86 @@ function setScene(centerCoord) {
     document.body.appendChild(renderer.domElement);
 
     window.addEventListener("resize", onWindowResize, false);
+}
 
-    const fov = 90;
+function setCamera(centerCoord) {
+    const fov = 75;
     const aspect = window.innerWidth / window.innerHeight;
     const near = 0.1;
     const far = 1000.0;
 
     camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
-    camera.position.set(centerCoord, 8, centerCoord);
+    camera.position.set(centerCoord, wallHeight / 2, centerCoord);
+}
 
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(centerCoord, 0, centerCoord);
-    controls.update();
+function onKeyDown(event) {
+    const code = event.code;
+    if (code === "KeyA" || code === "ArrowLeft") {
+        moveLeft = true;
+    }
+    if (code === "KeyD" || code === "ArrowRight") {
+        moveRight = true;
+    }
+    if (code === "KeyW" || code === "ArrowUp") {
+        moveForward = true;
+    }
+    if (code === "KeyS" || code === "ArrowDown") {
+        moveBackward = true;
+    }
+}
+
+function onKeyUp(event) {
+    const code = event.code;
+    if (code === "KeyA" || code === "ArrowLeft") {
+        moveLeft = false;
+    }
+    if (code === "KeyD" || code === "ArrowRight") {
+        moveRight = false;
+    }
+    if (code === "KeyW" || code === "ArrowUp") {
+        moveForward = false;
+    }
+    if (code === "KeyS" || code === "ArrowDown") {
+        moveBackward = false;
+    }
+    if (code === "Space") {
+        isJumping = false;
+    }
+}
+
+function movementUpdate() {
+    if (!controls.isLocked) return;
+
+    const time = performance.now(); // current time
+    const delta = (time - prevTime) / 1000; // different in time
+    // calculate amount of time since last render , in seconds
+
+    velocity.x -= velocity.x * speed * delta;
+    velocity.z -= velocity.z * speed * delta;
+
+    direction.z = Number(moveForward) - Number(moveBackward);
+    direction.x = Number(moveRight) - Number(moveLeft);
+    direction.normalize();
+
+    if (moveForward || moveBackward) velocity.z -= direction.z * moveSpeed * delta;
+    if (moveLeft || moveRight) velocity.x -= direction.x * moveSpeed * delta;
+
+    controls.moveRight(-velocity.x * delta);
+    controls.moveForward(-velocity.z * delta);
+
+    prevTime = time;
+}
+
+function setControls() {
+    controls = new PointerLockControls(camera, renderer.domElement);
+    scene.add(controls.getObject());
+
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("keyup", onKeyUp);
+
+    renderer.domElement.addEventListener("click", function () {
+        controls.lock();
+    });
 }
 
 function setWall(width, depth, x, z, material = null) {
@@ -149,14 +233,21 @@ function init() {
     const centerCoord = (dificulty - 1) / 2;
     const maze = generateMaze(dificulty, dificulty);
 
-    setScene(centerCoord);
+    setScene();
+    setCamera(centerCoord);
+    setControls();
 
     setBackground();
     setFloors(dificulty, centerCoord);
     setMaze(maze);
     setLights();
 
-    render();
+    animate();
+
+    document.addEventListener("click", () => {
+        if (controls) controls.lock();
+        else console.warn("null/undefined controls");
+    });
 }
 
 window.onload = init;
