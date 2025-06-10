@@ -46,7 +46,10 @@ var prevTime = performance.now();
 const velocity = new THREE.Vector3(); // movement of camera/player
 const direction = new THREE.Vector3(); // direction of camera/player
 const speed = 10;
-let moveSpeed = 20;
+const moveDefaultSpeed = 20;
+const moveFastSpeed = 30;
+const moveSlowSpeed = 10;
+const moveFlySpeed = 100;
 
 // Adiciona variáveis para posição inicial do jogador
 let initialPlayerPosition = null;
@@ -153,6 +156,7 @@ function setGame() {
     setLights();
 
     createBalls();
+    createVictorySign();
 
     // Garante que o animate continue rodando
     prevTime = performance.now();
@@ -233,6 +237,8 @@ function onKeyUp(event) {
 function movementUpdate() {
     if (!controls.isLocked) return;
 
+    let thisMoveSpeed = moveDefaultSpeed;
+
     const time = performance.now(); // current time
     const delta = (time - prevTime) / 1000; // different in time
     // calculate amount of time since last render , in seconds
@@ -240,14 +246,12 @@ function movementUpdate() {
     // Ajusta moveSpeed conforme teclas pressionadas
     if (!window.creativeMode) {
         if (moveSlow) {
-            moveSpeed = 10;
+            thisMoveSpeed = moveSlowSpeed;
         } else if (moveFast) {
-            moveSpeed = 30;
-        } else {
-            moveSpeed = 20;
+            thisMoveSpeed = moveFastSpeed;
         }
     } else {
-        moveSpeed = 40;
+        thisMoveSpeed = moveFlySpeed;
     }
 
     velocity.x -= velocity.x * speed * delta;
@@ -258,13 +262,13 @@ function movementUpdate() {
     direction.x = Number(moveRight) - Number(moveLeft);
     direction.normalize();
 
-    if (moveForward || moveBackward) velocity.z -= direction.z * moveSpeed * delta;
-    if (moveLeft || moveRight) velocity.x -= direction.x * moveSpeed * delta;
+    if (moveForward || moveBackward) velocity.z -= direction.z * thisMoveSpeed * delta;
+    if (moveLeft || moveRight) velocity.x -= direction.x * thisMoveSpeed * delta;
 
     if (window.creativeMode) {
         // in creative mode, player can fly
-        if (moveUp) velocity.y += moveSpeed * delta;
-        if (moveDown) velocity.y -= moveSpeed * delta;
+        if (moveUp) velocity.y += thisMoveSpeed * delta;
+        if (moveDown) velocity.y -= thisMoveSpeed * delta;
     }
 
     controls.moveRight(-velocity.x * delta);
@@ -406,6 +410,50 @@ function tryKickBall() {
         dir.normalize();
         closest.velocity.copy(dir.multiplyScalar(BALL_KICK_SPEED));
     }
+}
+
+// --- Função para criar a placa de vitória ---
+function createVictorySign() {
+    if (!window.posX || !window.posZ) return;
+    // Saída: canto superior direito (última célula)
+    const x0 = window.posX[window.posX.length - 2];
+    const x1 = window.posX[window.posX.length - 1];
+    const z0 = window.posZ[window.posZ.length - 1];
+    // Placa ficará fora do labirinto, após a saída
+    const signX = (x0 + x1) / 2;
+    const signZ = z0 + 1.2; // 1.2m fora do labirinto
+    // Placa
+    const signWidth = 2;
+    const signHeight = 0.7;
+    const signGeometry = new THREE.PlaneGeometry(signWidth, signHeight);
+    // Cria textura de canvas com texto
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 128;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.font = "bold 48px Arial";
+    ctx.fillStyle = "#222";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("você conseguiu!", canvas.width / 2, canvas.height / 2);
+    const texture = new THREE.CanvasTexture(canvas);
+    const signMaterial = new THREE.MeshBasicMaterial({
+        map: texture,
+        side: THREE.DoubleSide,
+        transparent: false,
+    });
+    const sign = new THREE.Mesh(signGeometry, signMaterial);
+    sign.position.set(signX, 1, signZ - 0.05);
+    sign.rotation.y = Math.PI; // Olhando para dentro do labirinto
+    scene.add(sign);
+    // Poste da placa
+    const postGeometry = new THREE.CylinderGeometry(0.05, 0.05, 1.2, 16);
+    const postMaterial = new THREE.MeshStandardMaterial({ color: 0x888888 });
+    const post = new THREE.Mesh(postGeometry, postMaterial);
+    post.position.set(signX, 0.4, signZ);
+    scene.add(post);
 }
 
 function isOnMargin(position) {
