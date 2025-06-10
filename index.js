@@ -12,7 +12,7 @@ var renderer;
 var controls;
 
 const wallThin = 0.1;
-const wallHeight = 0.2;
+const wallHeight = 1;
 
 const FLOOR_TEXTURE = new THREE.TextureLoader().load("./resources/textures/floor4.jpg");
 FLOOR_TEXTURE.wrapS = FLOOR_TEXTURE.wrapT = THREE.MirroredRepeatWrapping;
@@ -631,10 +631,12 @@ function setFloors() {
     scene.add(plane);
 
     function drawMarginRectAndCircles(cx, cz, w, h, isHorizontal, marginMaterial) {
+        const marginSoloHeight = 0.0001; // Altura do solo para as margens
+
         // Retângulo central
         const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), marginMaterial);
         mesh.rotation.x = -Math.PI / 2;
-        mesh.position.set(cx, 0.03, cz);
+        mesh.position.set(cx, marginSoloHeight, cz);
         mesh.userData = { type: "margin" };
         scene.add(mesh);
         // Círculos nas pontas
@@ -643,7 +645,7 @@ function setFloors() {
             for (const px of [cx - w / 2, cx + w / 2]) {
                 const circle = new THREE.Mesh(new THREE.CircleGeometry(r, 32), marginMaterial);
                 circle.rotation.x = -Math.PI / 2;
-                circle.position.set(px, 0.031, cz);
+                circle.position.set(px, marginSoloHeight, cz);
                 circle.userData = { type: "margin" };
                 scene.add(circle);
             }
@@ -651,7 +653,7 @@ function setFloors() {
             for (const pz of [cz - h / 2, cz + h / 2]) {
                 const circle = new THREE.Mesh(new THREE.CircleGeometry(r, 32), marginMaterial);
                 circle.rotation.x = -Math.PI / 2;
-                circle.position.set(cx, 0.031, pz);
+                circle.position.set(cx, marginSoloHeight, pz);
                 circle.userData = { type: "margin" };
                 scene.add(circle);
             }
@@ -659,7 +661,7 @@ function setFloors() {
     }
 
     // Desenha margens 360 graus ao redor de cada parede, com círculos completos nas pontas
-    const margin = 1;
+    const margin = 1 - wallThin / 2; // Margem de 1 metro, menos metade da espessura da parede
     const marginColor = window.creativeMode ? 0x226622 : 0x662222;
     const marginMaterial = new THREE.MeshBasicMaterial({
         color: marginColor,
