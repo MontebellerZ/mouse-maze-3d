@@ -118,6 +118,33 @@ function updateMarginsColor() {
     setFloors();
 }
 
+function setGame() {
+    // Remove todos os objetos da cena, se houverem
+    while (scene.children.length > 0) {
+        scene.remove(scene.children[0]);
+    }
+
+    // Gera novo labirinto e inicializa tudo
+    const centerCoord = (window.dificulty - 1) / 2;
+    const maze = generateMaze(window.dificulty, window.dificulty);
+
+    maze[window.dificulty - 1][0].bottom = false;
+    maze[0][window.dificulty - 1].top = false;
+
+    setMaze(maze);
+
+    setCamera(centerCoord);
+
+    setControls();
+
+    setBackground();
+    setFloors();
+    setLights();
+
+    // Garante que o animate continue rodando
+    prevTime = performance.now();
+}
+
 function onKeyDown(event) {
     const code = event.code;
     if (code === "KeyA" || code === "ArrowLeft") {
@@ -150,6 +177,9 @@ function onKeyDown(event) {
     if (code === "KeyC") {
         window.creativeMode = !window.creativeMode;
         updateMarginsColor();
+    }
+    if (code === "KeyR") {
+        setGame();
     }
 }
 
@@ -197,7 +227,7 @@ function movementUpdate() {
             moveSpeed = 20;
         }
     } else {
-        moveSpeed = 20;
+        moveSpeed = 40;
     }
 
     const time = performance.now(); // current time
@@ -501,24 +531,14 @@ function setBackground() {
 
 function init() {
     const creativeMode = false; // true = modo criativo, false = modo sobrevivência
-    window.creativeMode = creativeMode;
-
     const dificulty = 10;
-    const centerCoord = (dificulty - 1) / 2;
-    const maze = generateMaze(dificulty, dificulty);
 
-    // Remove a parede superior da célula inicial (entrada) e a parede inferior da célula final (saída)
-    maze[dificulty - 1][0].bottom = false; // entrada canto inferior esquerdo
-    maze[0][dificulty - 1].top = false; // saída canto superior direito
+    window.creativeMode = creativeMode;
+    window.dificulty = dificulty;
 
     setScene();
-    setMaze(maze); // Precisa ser antes da câmera para garantir posX/posZ
-    setCamera(centerCoord);
-    setControls();
 
-    setBackground();
-    setFloors();
-    setLights();
+    setGame();
 
     animate();
 
