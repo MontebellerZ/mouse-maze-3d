@@ -83,13 +83,15 @@ function setCamera(centerCoord) {
 
     camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
 
-    if (window.creativeMode) {
-        camera.position.set(centerCoord, height * 20, centerCoord);
-    } else {
-        camera.position.set(centerCoord, height, centerCoord);
-    }
-
-    camera.lookAt(centerCoord, height, centerCoord);
+    // Posição inicial: fora da entrada do labirinto, olhando para dentro
+    // A entrada está no canto inferior esquerdo (x=0, z=0), mas as posições reais estão em posX[0], posZ[0]
+    // Vamos posicionar o jogador um pouco antes da entrada, olhando para dentro
+    const offset = 2; // distância fora do labirinto
+    const x = window.posX ? window.posX[0] : centerCoord;
+    const z = window.posZ ? window.posZ[0] - offset : centerCoord - offset;
+    camera.position.set(x + (window.posX ? (window.posX[1] - window.posX[0]) / 2 : 0.5), height, z);
+    // Olhar para dentro do labirinto (direção positiva de z)
+    camera.lookAt(x + (window.posX ? (window.posX[1] - window.posX[0]) / 2 : 0.5), height, window.posZ ? window.posZ[0] + 2 : centerCoord + 2);
 }
 
 function updateMarginsColor() {
@@ -393,11 +395,11 @@ function init() {
     maze[0][dificulty - 1].top = false; // saída canto superior direito
 
     setScene();
+    setMaze(maze); // Precisa ser antes da câmera para garantir posX/posZ
     setCamera(centerCoord);
     setControls();
 
     setBackground();
-    setMaze(maze);
     setFloors();
     setLights();
 
