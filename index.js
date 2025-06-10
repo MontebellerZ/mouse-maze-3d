@@ -38,13 +38,18 @@ var moveLeft = false;
 var moveRight = false;
 var moveUp = false; // only in creative mode
 var moveDown = false; // only in creative mode
+var moveSlow = false;
+var moveFast = false;
 
 var prevTime = performance.now();
 
 const velocity = new THREE.Vector3(); // movement of camera/player
 const direction = new THREE.Vector3(); // direction of camera/player
 const speed = 10;
-const moveSpeed = 40;
+let moveSpeed = 20;
+
+// Adiciona variáveis para posição inicial do jogador
+let initialPlayerPosition = null;
 
 function animate() {
     requestAnimationFrame(animate);
@@ -89,9 +94,19 @@ function setCamera(centerCoord) {
     const offset = 2; // distância fora do labirinto
     const x = window.posX ? window.posX[0] : centerCoord;
     const z = window.posZ ? window.posZ[0] - offset : centerCoord - offset;
-    camera.position.set(x + (window.posX ? (window.posX[1] - window.posX[0]) / 2 : 0.5), height, z);
-    // Olhar para dentro do labirinto (direção positiva de z)
-    camera.lookAt(x + (window.posX ? (window.posX[1] - window.posX[0]) / 2 : 0.5), height, window.posZ ? window.posZ[0] + 2 : centerCoord + 2);
+    const px = x + (window.posX ? (window.posX[1] - window.posX[0]) / 2 : 0.5);
+    const py = height;
+    camera.position.set(px, py, z);
+    camera.lookAt(px, py, window.posZ ? window.posZ[0] + 2 : centerCoord + 2);
+    // Salva posição inicial
+    initialPlayerPosition = new THREE.Vector3(px, py, z);
+}
+
+function resetPlayerToInitialPosition() {
+    if (initialPlayerPosition) {
+        controls.getObject().position.copy(initialPlayerPosition);
+        velocity.set(0, 0, 0);
+    }
 }
 
 function updateMarginsColor() {
@@ -117,11 +132,20 @@ function onKeyDown(event) {
     if (code === "KeyS" || code === "ArrowDown") {
         moveBackward = true;
     }
-    if (code === "Space" && window.creativeMode) {
-        moveUp = true;
-    }
-    if (code === "ShiftLeft" && window.creativeMode) {
-        moveDown = true;
+    if (window.creativeMode) {
+        if (code === "Space" && window.creativeMode) {
+            moveUp = true;
+        }
+        if (code === "ShiftLeft" && window.creativeMode) {
+            moveDown = true;
+        }
+    } else {
+        if (code === "ShiftLeft") {
+            moveSlow = true;
+        }
+        if (code === "ControlLeft") {
+            moveFast = true;
+        }
     }
     if (code === "KeyC") {
         window.creativeMode = !window.creativeMode;
@@ -143,16 +167,38 @@ function onKeyUp(event) {
     if (code === "KeyS" || code === "ArrowDown") {
         moveBackward = false;
     }
-    if (code === "Space" && window.creativeMode) {
-        moveUp = false;
-    }
-    if (code === "ShiftLeft" && window.creativeMode) {
-        moveDown = false;
+    if (window.creativeMode) {
+        if (code === "Space" && window.creativeMode) {
+            moveUp = false;
+        }
+        if (code === "ShiftLeft" && window.creativeMode) {
+            moveDown = false;
+        }
+    } else {
+        if (code === "ShiftLeft") {
+            moveSlow = false;
+        }
+        if (code === "ControlLeft") {
+            moveFast = false;
+        }
     }
 }
 
 function movementUpdate() {
     if (!controls.isLocked) return;
+
+    // Ajusta moveSpeed conforme teclas pressionadas
+    if (!window.creativeMode) {
+        if (moveSlow) {
+            moveSpeed = 10;
+        } else if (moveFast) {
+            moveSpeed = 30;
+        } else {
+            moveSpeed = 20;
+        }
+    } else {
+        moveSpeed = 20;
+    }
 
     const time = performance.now(); // current time
     const delta = (time - prevTime) / 1000; // different in time
@@ -179,7 +225,78 @@ function movementUpdate() {
     controls.moveForward(-velocity.z * delta);
     controls.getObject().position.y += velocity.y * delta;
 
+    // Verifica se está sobre uma margem (modo sobrevivência)
+    if (!window.creativeMode && isOnMargin(controls.getObject().position)) {
+        resetPlayerToInitialPosition();
+    }
+
     prevTime = time;
+}
+
+function isOnMargin(position) {
+    // Retorna true se o jogador estiver a menos de 1 metro de qualquer parede ou círculo das margens
+    if (!window.maze || !window.posX || !window.posZ) return false;
+    const margin = 1;
+    const rows = window.maze.length;
+    const cols = window.maze[0].length;
+    for (let z = 0; z < rows; z++) {
+        for (let x = 0; x < cols; x++) {
+            const cell = window.maze[z][x];
+            const x0 = window.posX[x];
+            const x1 = window.posX[x + 1];
+            const z0 = window.posZ[z];
+            const z1 = window.posZ[z + 1];
+            // Parede superior
+            if (cell.top) {
+                const dist = Math.abs(position.z - z1);
+                if (position.x >= x0 && position.x <= x1 && dist < margin) return true;
+                // Círculos nas pontas
+                const leftCircle = { x: x0, z: z1 };
+                const rightCircle = { x: x1, z: z1 };
+                if (Math.hypot(position.x - leftCircle.x, position.z - leftCircle.z) < margin)
+                    return true;
+                if (Math.hypot(position.x - rightCircle.x, position.z - rightCircle.z) < margin)
+                    return true;
+            }
+            // Parede inferior
+            if (cell.bottom) {
+                const dist = Math.abs(position.z - z0);
+                if (position.x >= x0 && position.x <= x1 && dist < margin) return true;
+                // Círculos nas pontas
+                const leftCircle = { x: x0, z: z0 };
+                const rightCircle = { x: x1, z: z0 };
+                if (Math.hypot(position.x - leftCircle.x, position.z - leftCircle.z) < margin)
+                    return true;
+                if (Math.hypot(position.x - rightCircle.x, position.z - rightCircle.z) < margin)
+                    return true;
+            }
+            // Parede esquerda
+            if (cell.left) {
+                const dist = Math.abs(position.x - x0);
+                if (position.z >= z0 && position.z <= z1 && dist < margin) return true;
+                // Círculos nas pontas
+                const topCircle = { x: x0, z: z1 };
+                const bottomCircle = { x: x0, z: z0 };
+                if (Math.hypot(position.x - topCircle.x, position.z - topCircle.z) < margin)
+                    return true;
+                if (Math.hypot(position.x - bottomCircle.x, position.z - bottomCircle.z) < margin)
+                    return true;
+            }
+            // Parede direita
+            if (cell.right) {
+                const dist = Math.abs(position.x - x1);
+                if (position.z >= z0 && position.z <= z1 && dist < margin) return true;
+                // Círculos nas pontas
+                const topCircle = { x: x1, z: z1 };
+                const bottomCircle = { x: x1, z: z0 };
+                if (Math.hypot(position.x - topCircle.x, position.z - topCircle.z) < margin)
+                    return true;
+                if (Math.hypot(position.x - bottomCircle.x, position.z - bottomCircle.z) < margin)
+                    return true;
+            }
+        }
+    }
+    return false;
 }
 
 function setControls() {
