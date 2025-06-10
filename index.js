@@ -12,7 +12,7 @@ var renderer;
 var controls;
 
 const wallThin = 0.1;
-const wallHeight = 1;
+const wallHeight = 0.2;
 
 const FLOOR_TEXTURE = new THREE.TextureLoader().load("./resources/textures/floor4.jpg");
 FLOOR_TEXTURE.wrapS = FLOOR_TEXTURE.wrapT = THREE.MirroredRepeatWrapping;
@@ -51,10 +51,21 @@ let moveSpeed = 20;
 // Adiciona variáveis para posição inicial do jogador
 let initialPlayerPosition = null;
 
+// --- Bolas brancas móveis ---
+const BALL_COUNT = 10;
+const BALL_RADIUS = 0.3;
+const BALL_COLOR = 0xffffff;
+const BALL_FRICTION = 0.98; // desaceleração
+const BALL_BOUNCE = 0.8; // coeficiente de restituição
+const BALL_KICK_SPEED = 8;
+let balls = [];
+
 function animate() {
     requestAnimationFrame(animate);
 
     movementUpdate();
+
+    updateBalls();
 
     renderer.render(scene, camera);
 }
@@ -84,7 +95,7 @@ function setCamera(centerCoord) {
     const aspect = window.innerWidth / window.innerHeight;
     const near = 0.1;
     const far = 1000.0;
-    const height = wallHeight * 0.8;
+    const height = 0.8;
 
     camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
 
@@ -141,6 +152,8 @@ function setGame() {
     setFloors();
     setLights();
 
+    createBalls();
+
     // Garante que o animate continue rodando
     prevTime = performance.now();
 }
@@ -181,6 +194,9 @@ function onKeyDown(event) {
     if (code === "KeyR") {
         setGame();
     }
+    if (code === "Space" && !window.creativeMode) {
+        tryKickBall();
+    }
 }
 
 function onKeyUp(event) {
@@ -217,6 +233,10 @@ function onKeyUp(event) {
 function movementUpdate() {
     if (!controls.isLocked) return;
 
+    const time = performance.now(); // current time
+    const delta = (time - prevTime) / 1000; // different in time
+    // calculate amount of time since last render , in seconds
+
     // Ajusta moveSpeed conforme teclas pressionadas
     if (!window.creativeMode) {
         if (moveSlow) {
@@ -229,10 +249,6 @@ function movementUpdate() {
     } else {
         moveSpeed = 40;
     }
-
-    const time = performance.now(); // current time
-    const delta = (time - prevTime) / 1000; // different in time
-    // calculate amount of time since last render , in seconds
 
     velocity.x -= velocity.x * speed * delta;
     velocity.z -= velocity.z * speed * delta;
@@ -261,6 +277,135 @@ function movementUpdate() {
     }
 
     prevTime = time;
+}
+
+// --- Bolas brancas móveis ---
+function createBalls() {
+    balls = [];
+
+    for (let i = 0; i < BALL_COUNT; i++) {
+        let x, z;
+
+        const col = Math.floor(Math.random() * (window.posX.length - 1));
+        const row = Math.floor(Math.random() * (window.posZ.length - 1));
+        x = (window.posX[col] + window.posX[col + 1]) / 2;
+        z = (window.posZ[row] + window.posZ[row + 1]) / 2;
+
+        const mesh = new THREE.Mesh(
+            new THREE.SphereGeometry(BALL_RADIUS, 24, 24),
+            new THREE.MeshStandardMaterial({ color: BALL_COLOR })
+        );
+        mesh.position.set(x, BALL_RADIUS, z);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        scene.add(mesh);
+        balls.push({
+            mesh,
+            velocity: new THREE.Vector3(0, 0, 0),
+        });
+    }
+}
+
+function updateBalls() {
+    if (!balls || !balls.length) return;
+
+    const delta = 1 / 60; // different in time
+
+    for (const ball of balls) {
+        // Aplica velocidade
+        ball.mesh.position.x += ball.velocity.x * delta;
+        ball.mesh.position.z += ball.velocity.z * delta;
+
+        // Desaceleração
+        ball.velocity.multiplyScalar(BALL_FRICTION);
+
+        // Se velocidade for muito baixa, para
+        if (ball.velocity.length() < 0.05) ball.velocity.set(0, 0, 0);
+
+        // Colisão com paredes do labirinto
+        const px = ball.mesh.position.x;
+        const pz = ball.mesh.position.z;
+
+        for (let z = 0; z < window.maze.length; z++) {
+            for (let x = 0; x < window.maze[0].length; x++) {
+                const cell = window.maze[z][x];
+                const x0 = window.posX[x];
+                const x1 = window.posX[x + 1];
+                const z0 = window.posZ[z];
+                const z1 = window.posZ[z + 1];
+                // Superior
+                if (
+                    cell.top &&
+                    pz + BALL_RADIUS > z1 &&
+                    pz < z1 &&
+                    px >= x0 &&
+                    px <= x1 &&
+                    ball.velocity.z > 0
+                ) {
+                    ball.mesh.position.z = z1 - BALL_RADIUS;
+                    ball.velocity.z *= -BALL_BOUNCE;
+                }
+                // Inferior
+                else if (
+                    cell.bottom &&
+                    pz - BALL_RADIUS < z0 &&
+                    pz > z0 &&
+                    px >= x0 &&
+                    px <= x1 &&
+                    ball.velocity.z < 0
+                ) {
+                    ball.mesh.position.z = z0 + BALL_RADIUS;
+                    ball.velocity.z *= -BALL_BOUNCE;
+                }
+                // Esquerda
+                else if (
+                    cell.left &&
+                    px - BALL_RADIUS < x0 &&
+                    px > x0 &&
+                    pz >= z0 &&
+                    pz <= z1 &&
+                    ball.velocity.x < 0
+                ) {
+                    ball.mesh.position.x = x0 + BALL_RADIUS;
+                    ball.velocity.x *= -BALL_BOUNCE;
+                }
+                // Direita
+                else if (
+                    cell.right &&
+                    px + BALL_RADIUS > x1 &&
+                    px < x1 &&
+                    pz >= z0 &&
+                    pz <= z1 &&
+                    ball.velocity.x > 0
+                ) {
+                    ball.mesh.position.x = x1 - BALL_RADIUS;
+                    ball.velocity.x *= -BALL_BOUNCE;
+                }
+            }
+        }
+    }
+}
+
+function tryKickBall() {
+    // Chuta a bola mais próxima do jogador (até 1.2m de distância)
+    const playerPos = controls.getObject().position;
+    let closest = null;
+    let minDist = 1.2;
+    for (const ball of balls) {
+        const dist = playerPos.distanceTo(ball.mesh.position);
+        if (dist < minDist) {
+            closest = ball;
+            minDist = dist;
+        }
+    }
+    if (closest) {
+        // Direção do olhar do jogador
+        const dir = new THREE.Vector3();
+        camera.getWorldDirection(dir);
+        dir.y = 0;
+        dir.normalize();
+        closest.velocity.copy(dir.multiplyScalar(BALL_KICK_SPEED));
+    }
 }
 
 function isOnMargin(position) {
