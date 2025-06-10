@@ -36,6 +36,8 @@ var moveForward = false;
 var moveBackward = false;
 var moveLeft = false;
 var moveRight = false;
+var moveUp = false; // only in creative mode
+var moveDown = false; // only in creative mode
 
 var prevTime = performance.now();
 
@@ -77,11 +79,26 @@ function setCamera(centerCoord) {
     const aspect = window.innerWidth / window.innerHeight;
     const near = 0.1;
     const far = 1000.0;
+    const height = wallHeight * 0.8;
 
     camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
-    // camera.position.set(centerCoord, wallHeight / 2, centerCoord);
-    camera.position.set(centerCoord, wallHeight * 20, centerCoord);
-    camera.lookAt(centerCoord, wallHeight / 2, centerCoord);
+
+    if (window.creativeMode) {
+        camera.position.set(centerCoord, height * 20, centerCoord);
+    } else {
+        camera.position.set(centerCoord, height, centerCoord);
+    }
+
+    camera.lookAt(centerCoord, height, centerCoord);
+}
+
+function updateMarginsColor() {
+    // Remove todas as margens antigas
+    scene.children = scene.children.filter(
+        (obj) => !obj.userData || obj.userData.type !== "margin"
+    );
+    // Redesenha as margens com a cor correta
+    setFloors();
 }
 
 function onKeyDown(event) {
@@ -97,6 +114,16 @@ function onKeyDown(event) {
     }
     if (code === "KeyS" || code === "ArrowDown") {
         moveBackward = true;
+    }
+    if (code === "Space" && window.creativeMode) {
+        moveUp = true;
+    }
+    if (code === "ShiftLeft" && window.creativeMode) {
+        moveDown = true;
+    }
+    if (code === "KeyC") {
+        window.creativeMode = !window.creativeMode;
+        updateMarginsColor();
     }
 }
 
@@ -114,8 +141,11 @@ function onKeyUp(event) {
     if (code === "KeyS" || code === "ArrowDown") {
         moveBackward = false;
     }
-    if (code === "Space") {
-        isJumping = false;
+    if (code === "Space" && window.creativeMode) {
+        moveUp = false;
+    }
+    if (code === "ShiftLeft" && window.creativeMode) {
+        moveDown = false;
     }
 }
 
@@ -128,6 +158,7 @@ function movementUpdate() {
 
     velocity.x -= velocity.x * speed * delta;
     velocity.z -= velocity.z * speed * delta;
+    velocity.y -= velocity.y * speed * delta;
 
     direction.z = Number(moveForward) - Number(moveBackward);
     direction.x = Number(moveRight) - Number(moveLeft);
@@ -136,8 +167,15 @@ function movementUpdate() {
     if (moveForward || moveBackward) velocity.z -= direction.z * moveSpeed * delta;
     if (moveLeft || moveRight) velocity.x -= direction.x * moveSpeed * delta;
 
+    if (window.creativeMode) {
+        // in creative mode, player can fly
+        if (moveUp) velocity.y += moveSpeed * delta;
+        if (moveDown) velocity.y -= moveSpeed * delta;
+    }
+
     controls.moveRight(-velocity.x * delta);
     controls.moveForward(-velocity.z * delta);
+    controls.getObject().position.y += velocity.y * delta;
 
     prevTime = time;
 }
@@ -167,8 +205,8 @@ function setMaze(maze) {
     // Gera larguras aleatórias para corredores horizontais e verticais
     const rows = maze.length;
     const cols = maze[0].length;
-    const corridorWidthsX = Array.from({ length: cols + 1 }, () => Math.random() * 3 + 1); // 1 a 4 metros
-    const corridorWidthsZ = Array.from({ length: rows + 1 }, () => Math.random() * 3 + 1);
+    const corridorWidthsX = Array.from({ length: cols + 1 }, () => Math.random() * 2 + 1.9); // 1,8 a 3 metros
+    const corridorWidthsZ = Array.from({ length: rows + 1 }, () => Math.random() * 2 + 1.9); // 1,8 a 3 metros
 
     // Calcula as posições acumuladas para cada célula
     const posX = [0];
@@ -255,6 +293,7 @@ function setFloors() {
         const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), marginMaterial);
         mesh.rotation.x = -Math.PI / 2;
         mesh.position.set(cx, 0.03, cz);
+        mesh.userData = { type: "margin" };
         scene.add(mesh);
         // Círculos nas pontas
         const r = isHorizontal ? h / 2 : w / 2;
@@ -263,6 +302,7 @@ function setFloors() {
                 const circle = new THREE.Mesh(new THREE.CircleGeometry(r, 32), marginMaterial);
                 circle.rotation.x = -Math.PI / 2;
                 circle.position.set(px, 0.031, cz);
+                circle.userData = { type: "margin" };
                 scene.add(circle);
             }
         } else {
@@ -270,15 +310,17 @@ function setFloors() {
                 const circle = new THREE.Mesh(new THREE.CircleGeometry(r, 32), marginMaterial);
                 circle.rotation.x = -Math.PI / 2;
                 circle.position.set(cx, 0.031, pz);
+                circle.userData = { type: "margin" };
                 scene.add(circle);
             }
         }
     }
 
-    // Desenha margens vermelhas 360 graus ao redor de cada parede, com círculos completos nas pontas
+    // Desenha margens 360 graus ao redor de cada parede, com círculos completos nas pontas
     const margin = 1;
+    const marginColor = window.creativeMode ? 0x226622 : 0x662222;
     const marginMaterial = new THREE.MeshBasicMaterial({
-        color: 0x662222,
+        color: marginColor,
         transparent: true,
         opacity: 1,
         side: THREE.DoubleSide,
@@ -339,6 +381,9 @@ function setBackground() {
 }
 
 function init() {
+    const creativeMode = false; // true = modo criativo, false = modo sobrevivência
+    window.creativeMode = creativeMode;
+
     const dificulty = 10;
     const centerCoord = (dificulty - 1) / 2;
     const maze = generateMaze(dificulty, dificulty);
