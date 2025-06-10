@@ -43,7 +43,7 @@ var prevTime = performance.now();
 const velocity = new THREE.Vector3(); // movement of camera/player
 const direction = new THREE.Vector3(); // direction of camera/player
 const speed = 10;
-const moveSpeed = 10;
+const moveSpeed = 20;
 
 function animate() {
     requestAnimationFrame(animate);
@@ -80,7 +80,8 @@ function setCamera(centerCoord) {
     const far = 1000.0;
 
     camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
-    camera.position.set(centerCoord, wallHeight / 2, centerCoord);
+    // camera.position.set(centerCoord, wallHeight / 2, centerCoord);
+    camera.position.set(centerCoord, wallHeight * 20, centerCoord);
 }
 
 function onKeyDown(event) {
@@ -163,19 +164,46 @@ function setWall(width, depth, x, z, material = null) {
 }
 
 function setMaze(maze) {
-    // Loop through maze cells to create walls
+    // Gera larguras aleatórias para corredores horizontais e verticais
+    const rows = maze.length;
+    const cols = maze[0].length;
+    const corridorWidthsX = Array.from({ length: cols + 1 }, () => Math.random() * 3 + 1); // 1 a 4 metros
+    const corridorWidthsZ = Array.from({ length: rows + 1 }, () => Math.random() * 3 + 1);
+
+    // Calcula as posições acumuladas para cada célula
+    const posX = [0];
+    for (let i = 0; i < cols; i++) {
+        posX.push(posX[i] + corridorWidthsX[i]);
+    }
+    const posZ = [0];
+    for (let i = 0; i < rows; i++) {
+        posZ.push(posZ[i] + corridorWidthsZ[i]);
+    }
+
     maze.reverse().forEach((row, z) => {
         row.forEach((cell, x) => {
-            // Check each wall of the cell and create a wall if it exists
-            if (cell.top) setWall(wallThick, wallThin, x, z + wallThick / 2 - wallThin / 2);
+            const x0 = posX[x];
+            const x1 = posX[x + 1];
+            const z0 = posZ[z];
+            const z1 = posZ[z + 1];
 
-            if (cell.bottom) setWall(wallThick, wallThin, x, z - wallThick / 2 + wallThin / 2);
+            // Parede superior
+            if (cell.top) setWall(x1 - x0, wallThin, (x0 + x1) / 2, z1 - wallThin / 2);
 
-            if (cell.left) setWall(wallThin, wallThick, x - wallThick / 2 + wallThin / 2, z);
+            // Parede inferior
+            if (cell.bottom) setWall(x1 - x0, wallThin, (x0 + x1) / 2, z0 + wallThin / 2);
 
-            if (cell.right) setWall(wallThin, wallThick, x + wallThick / 2 - wallThin / 2, z);
+            // Parede esquerda
+            if (cell.left) setWall(wallThin, z1 - z0, x0 + wallThin / 2, (z0 + z1) / 2);
+
+            // Parede direita
+            if (cell.right) setWall(wallThin, z1 - z0, x1 - wallThin / 2, (z0 + z1) / 2);
         });
     });
+
+    window.posX = posX;
+    window.posZ = posZ;
+    window.maze = maze;
 }
 
 function setLights() {
@@ -200,19 +228,128 @@ function setLights() {
     scene.add(ambientLight);
 }
 
-function setFloors(dificulty, center, material) {
-    const width = dificulty + 4;
-    const repeatTexture = width / 3;
-
-    FLOOR_TEXTURE.repeat.set(repeatTexture, repeatTexture);
-
-    const geometry = new THREE.PlaneGeometry(width, width, 10, 10);
-    const plane = new THREE.Mesh(geometry, material || FLOOR_MATERIAL);
+function setFloors() {
+    // O chão cobre toda a área do labirinto, mais 4 metros de borda em cada lado
+    if (!window.posX || !window.posZ) return;
+    const minX = posX[0] - 4;
+    const maxX = posX[posX.length - 1] + 4;
+    const minZ = posZ[0] - 4;
+    const maxZ = posZ[posZ.length - 1] + 4;
+    const width = maxX - minX;
+    const depth = maxZ - minZ;
+    const centerX = (minX + maxX) / 2;
+    const centerZ = (minZ + maxZ) / 2;
+    const repeatTextureX = width / 3;
+    const repeatTextureZ = depth / 3;
+    FLOOR_TEXTURE.repeat.set(repeatTextureX, repeatTextureZ);
+    const geometry = new THREE.PlaneGeometry(width, depth, 10, 10);
+    const plane = new THREE.Mesh(geometry, FLOOR_MATERIAL);
     plane.castShadow = false;
     plane.receiveShadow = true;
     plane.rotation.x = -Math.PI / 2;
-    plane.position.set(center, 0, center);
+    plane.position.set(centerX, 0, centerZ);
     scene.add(plane);
+
+    // Desenha margens vermelhas 360 graus ao redor de cada parede, com bordas arredondadas nas pontas
+    const margin = 1;
+    const marginMaterial = new THREE.MeshBasicMaterial({ color: 0x662222, transparent: true, opacity: 1, side: THREE.DoubleSide });
+    for (let z = 0; z < posZ.length - 1; z++) {
+        for (let x = 0; x < posX.length - 1; x++) {
+            const x0 = posX[x];
+            const x1 = posX[x + 1];
+            const z0 = posZ[z];
+            const z1 = posZ[z + 1];
+            // Parede superior
+            if ((window.maze && window.maze[z] && window.maze[z][x] && window.maze[z][x].top) || z === posZ.length - 2) {
+                const cx = (x0 + x1) / 2;
+                const cz = z1 - wallThin / 2;
+                const w = x1 - x0;
+                // Retângulo central
+                const marginGeo = new THREE.PlaneGeometry(w, wallThin + 2 * margin);
+                const mesh = new THREE.Mesh(marginGeo, marginMaterial);
+                mesh.rotation.x = -Math.PI / 2;
+                mesh.position.set(cx, 0.03, cz);
+                scene.add(mesh);
+                // Círculo completo nas pontas
+                const radius = (wallThin + 2 * margin) / 2;
+                let circleMesh = new THREE.Mesh(new THREE.CircleGeometry(radius, 32), marginMaterial);
+                circleMesh.rotation.x = -Math.PI / 2;
+                circleMesh.position.set(x0, 0.031, cz);
+                scene.add(circleMesh);
+                circleMesh = new THREE.Mesh(new THREE.CircleGeometry(radius, 32), marginMaterial);
+                circleMesh.rotation.x = -Math.PI / 2;
+                circleMesh.position.set(x1, 0.031, cz);
+                scene.add(circleMesh);
+            }
+            // Parede inferior
+            if ((window.maze && window.maze[z] && window.maze[z][x] && window.maze[z][x].bottom) || z === 0) {
+                const cx = (x0 + x1) / 2;
+                const cz = z0 + wallThin / 2;
+                const w = x1 - x0;
+                const marginGeo = new THREE.PlaneGeometry(w, wallThin + 2 * margin);
+                const mesh = new THREE.Mesh(marginGeo, marginMaterial);
+                mesh.rotation.x = -Math.PI / 2;
+                mesh.position.set(cx, 0.03, cz);
+                scene.add(mesh);
+                // Círculo completo nas pontas
+                const radius = (wallThin + 2 * margin) / 2;
+                let circleMesh = new THREE.Mesh(new THREE.CircleGeometry(radius, 32), marginMaterial);
+                circleMesh.rotation.x = -Math.PI / 2;
+                circleMesh.position.set(x0, 0.031, cz);
+                scene.add(circleMesh);
+                circleMesh = new THREE.Mesh(new THREE.CircleGeometry(radius, 32), marginMaterial);
+                circleMesh.rotation.x = -Math.PI / 2;
+                circleMesh.position.set(x1, 0.031, cz);
+                scene.add(circleMesh);
+            }
+            // Parede esquerda
+            if ((window.maze && window.maze[z] && window.maze[z][x] && window.maze[z][x].left) || x === 0) {
+                const cx = x0 + wallThin / 2;
+                const cz = (z0 + z1) / 2;
+                const d = z1 - z0;
+                const marginGeo = new THREE.PlaneGeometry(wallThin + 2 * margin, d);
+                const mesh = new THREE.Mesh(marginGeo, marginMaterial);
+                mesh.rotation.x = -Math.PI / 2;
+                mesh.position.set(cx, 0.03, cz);
+                scene.add(mesh);
+                // Círculo completo nas pontas
+                const radius = (wallThin + 2 * margin) / 2;
+                let circleMesh = new THREE.Mesh(new THREE.CircleGeometry(radius, 32), marginMaterial);
+                circleMesh.rotation.x = -Math.PI / 2;
+                circleMesh.rotation.z = Math.PI / 2;
+                circleMesh.position.set(cx, 0.031, z0);
+                scene.add(circleMesh);
+                circleMesh = new THREE.Mesh(new THREE.CircleGeometry(radius, 32), marginMaterial);
+                circleMesh.rotation.x = -Math.PI / 2;
+                circleMesh.rotation.z = -Math.PI / 2;
+                circleMesh.position.set(cx, 0.031, z1);
+                scene.add(circleMesh);
+            }
+            // Parede direita
+            if ((window.maze && window.maze[z] && window.maze[z][x] && window.maze[z][x].right) || x === posX.length - 2) {
+                const cx = x1 - wallThin / 2;
+                const cz = (z0 + z1) / 2;
+                const d = z1 - z0;
+                const marginGeo = new THREE.PlaneGeometry(wallThin + 2 * margin, d);
+                const mesh = new THREE.Mesh(marginGeo, marginMaterial);
+                mesh.rotation.x = -Math.PI / 2;
+                mesh.position.set(cx, 0.03, cz);
+                scene.add(mesh);
+                // Círculo completo nas pontas
+                const radius = (wallThin + 2 * margin) / 2;
+                let circleMesh = new THREE.Mesh(new THREE.CircleGeometry(radius, 32), marginMaterial);
+                circleMesh.rotation.x = -Math.PI / 2;
+                circleMesh.rotation.z = Math.PI / 2;
+                circleMesh.position.set(cx, 0.031, z0);
+                scene.add(circleMesh);
+                circleMesh = new THREE.Mesh(new THREE.CircleGeometry(radius, 32), marginMaterial);
+                circleMesh.rotation.x = -Math.PI / 2;
+                circleMesh.rotation.z = -Math.PI / 2;
+                circleMesh.position.set(cx, 0.031, z1);
+                scene.add(circleMesh);
+            }
+        }
+    }
 }
 
 function setBackground() {
@@ -238,8 +375,8 @@ function init() {
     setControls();
 
     setBackground();
-    setFloors(dificulty, centerCoord);
     setMaze(maze);
+    setFloors();
     setLights();
 
     animate();
