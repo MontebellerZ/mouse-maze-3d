@@ -49,7 +49,7 @@ const speed = 10;
 const moveDefaultSpeed = 20;
 const moveFastSpeed = 30;
 const moveSlowSpeed = 10;
-const moveFlySpeed = 100;
+const moveFlySpeed = 60;
 
 // Adiciona variáveis para posição inicial do jogador
 let initialPlayerPosition = null;
