@@ -12,7 +12,6 @@ var renderer;
 var controls;
 
 const wallThin = 0.1;
-const wallThick = 1 + wallThin;
 const wallHeight = 1;
 
 const FLOOR_TEXTURE = new THREE.TextureLoader().load("./resources/textures/floor4.jpg");
@@ -43,7 +42,7 @@ var prevTime = performance.now();
 const velocity = new THREE.Vector3(); // movement of camera/player
 const direction = new THREE.Vector3(); // direction of camera/player
 const speed = 10;
-const moveSpeed = 20;
+const moveSpeed = 40;
 
 function animate() {
     requestAnimationFrame(animate);
@@ -82,6 +81,7 @@ function setCamera(centerCoord) {
     camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
     // camera.position.set(centerCoord, wallHeight / 2, centerCoord);
     camera.position.set(centerCoord, wallHeight * 20, centerCoord);
+    camera.lookAt(centerCoord, wallHeight / 2, centerCoord);
 }
 
 function onKeyDown(event) {
@@ -250,103 +250,76 @@ function setFloors() {
     plane.position.set(centerX, 0, centerZ);
     scene.add(plane);
 
-    // Desenha margens vermelhas 360 graus ao redor de cada parede, com bordas arredondadas nas pontas
+    function drawMarginRectAndCircles(cx, cz, w, h, isHorizontal, marginMaterial) {
+        // Retângulo central
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), marginMaterial);
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.position.set(cx, 0.03, cz);
+        scene.add(mesh);
+        // Círculos nas pontas
+        const r = isHorizontal ? h / 2 : w / 2;
+        if (isHorizontal) {
+            for (const px of [cx - w / 2, cx + w / 2]) {
+                const circle = new THREE.Mesh(new THREE.CircleGeometry(r, 32), marginMaterial);
+                circle.rotation.x = -Math.PI / 2;
+                circle.position.set(px, 0.031, cz);
+                scene.add(circle);
+            }
+        } else {
+            for (const pz of [cz - h / 2, cz + h / 2]) {
+                const circle = new THREE.Mesh(new THREE.CircleGeometry(r, 32), marginMaterial);
+                circle.rotation.x = -Math.PI / 2;
+                circle.position.set(cx, 0.031, pz);
+                scene.add(circle);
+            }
+        }
+    }
+
+    // Desenha margens vermelhas 360 graus ao redor de cada parede, com círculos completos nas pontas
     const margin = 1;
-    const marginMaterial = new THREE.MeshBasicMaterial({ color: 0x662222, transparent: true, opacity: 1, side: THREE.DoubleSide });
+    const marginMaterial = new THREE.MeshBasicMaterial({
+        color: 0x662222,
+        transparent: true,
+        opacity: 1,
+        side: THREE.DoubleSide,
+    });
     for (let z = 0; z < posZ.length - 1; z++) {
         for (let x = 0; x < posX.length - 1; x++) {
             const x0 = posX[x];
             const x1 = posX[x + 1];
             const z0 = posZ[z];
             const z1 = posZ[z + 1];
-            // Parede superior
-            if ((window.maze && window.maze[z] && window.maze[z][x] && window.maze[z][x].top) || z === posZ.length - 2) {
+            // Superior
+            if (window?.maze?.[z]?.[x]?.top) {
                 const cx = (x0 + x1) / 2;
                 const cz = z1 - wallThin / 2;
                 const w = x1 - x0;
-                // Retângulo central
-                const marginGeo = new THREE.PlaneGeometry(w, wallThin + 2 * margin);
-                const mesh = new THREE.Mesh(marginGeo, marginMaterial);
-                mesh.rotation.x = -Math.PI / 2;
-                mesh.position.set(cx, 0.03, cz);
-                scene.add(mesh);
-                // Círculo completo nas pontas
-                const radius = (wallThin + 2 * margin) / 2;
-                let circleMesh = new THREE.Mesh(new THREE.CircleGeometry(radius, 32), marginMaterial);
-                circleMesh.rotation.x = -Math.PI / 2;
-                circleMesh.position.set(x0, 0.031, cz);
-                scene.add(circleMesh);
-                circleMesh = new THREE.Mesh(new THREE.CircleGeometry(radius, 32), marginMaterial);
-                circleMesh.rotation.x = -Math.PI / 2;
-                circleMesh.position.set(x1, 0.031, cz);
-                scene.add(circleMesh);
+                const h = wallThin + 2 * margin;
+                drawMarginRectAndCircles(cx, cz, w, h, true, marginMaterial);
             }
-            // Parede inferior
-            if ((window.maze && window.maze[z] && window.maze[z][x] && window.maze[z][x].bottom) || z === 0) {
+            // Inferior
+            if (window?.maze?.[z]?.[x]?.bottom) {
                 const cx = (x0 + x1) / 2;
                 const cz = z0 + wallThin / 2;
                 const w = x1 - x0;
-                const marginGeo = new THREE.PlaneGeometry(w, wallThin + 2 * margin);
-                const mesh = new THREE.Mesh(marginGeo, marginMaterial);
-                mesh.rotation.x = -Math.PI / 2;
-                mesh.position.set(cx, 0.03, cz);
-                scene.add(mesh);
-                // Círculo completo nas pontas
-                const radius = (wallThin + 2 * margin) / 2;
-                let circleMesh = new THREE.Mesh(new THREE.CircleGeometry(radius, 32), marginMaterial);
-                circleMesh.rotation.x = -Math.PI / 2;
-                circleMesh.position.set(x0, 0.031, cz);
-                scene.add(circleMesh);
-                circleMesh = new THREE.Mesh(new THREE.CircleGeometry(radius, 32), marginMaterial);
-                circleMesh.rotation.x = -Math.PI / 2;
-                circleMesh.position.set(x1, 0.031, cz);
-                scene.add(circleMesh);
+                const h = wallThin + 2 * margin;
+                drawMarginRectAndCircles(cx, cz, w, h, true, marginMaterial);
             }
-            // Parede esquerda
-            if ((window.maze && window.maze[z] && window.maze[z][x] && window.maze[z][x].left) || x === 0) {
+            // Esquerda
+            if (window?.maze?.[z]?.[x]?.left) {
                 const cx = x0 + wallThin / 2;
                 const cz = (z0 + z1) / 2;
-                const d = z1 - z0;
-                const marginGeo = new THREE.PlaneGeometry(wallThin + 2 * margin, d);
-                const mesh = new THREE.Mesh(marginGeo, marginMaterial);
-                mesh.rotation.x = -Math.PI / 2;
-                mesh.position.set(cx, 0.03, cz);
-                scene.add(mesh);
-                // Círculo completo nas pontas
-                const radius = (wallThin + 2 * margin) / 2;
-                let circleMesh = new THREE.Mesh(new THREE.CircleGeometry(radius, 32), marginMaterial);
-                circleMesh.rotation.x = -Math.PI / 2;
-                circleMesh.rotation.z = Math.PI / 2;
-                circleMesh.position.set(cx, 0.031, z0);
-                scene.add(circleMesh);
-                circleMesh = new THREE.Mesh(new THREE.CircleGeometry(radius, 32), marginMaterial);
-                circleMesh.rotation.x = -Math.PI / 2;
-                circleMesh.rotation.z = -Math.PI / 2;
-                circleMesh.position.set(cx, 0.031, z1);
-                scene.add(circleMesh);
+                const w = wallThin + 2 * margin;
+                const h = z1 - z0;
+                drawMarginRectAndCircles(cx, cz, w, h, false, marginMaterial);
             }
-            // Parede direita
-            if ((window.maze && window.maze[z] && window.maze[z][x] && window.maze[z][x].right) || x === posX.length - 2) {
+            // Direita
+            if (window?.maze?.[z]?.[x]?.right) {
                 const cx = x1 - wallThin / 2;
                 const cz = (z0 + z1) / 2;
-                const d = z1 - z0;
-                const marginGeo = new THREE.PlaneGeometry(wallThin + 2 * margin, d);
-                const mesh = new THREE.Mesh(marginGeo, marginMaterial);
-                mesh.rotation.x = -Math.PI / 2;
-                mesh.position.set(cx, 0.03, cz);
-                scene.add(mesh);
-                // Círculo completo nas pontas
-                const radius = (wallThin + 2 * margin) / 2;
-                let circleMesh = new THREE.Mesh(new THREE.CircleGeometry(radius, 32), marginMaterial);
-                circleMesh.rotation.x = -Math.PI / 2;
-                circleMesh.rotation.z = Math.PI / 2;
-                circleMesh.position.set(cx, 0.031, z0);
-                scene.add(circleMesh);
-                circleMesh = new THREE.Mesh(new THREE.CircleGeometry(radius, 32), marginMaterial);
-                circleMesh.rotation.x = -Math.PI / 2;
-                circleMesh.rotation.z = -Math.PI / 2;
-                circleMesh.position.set(cx, 0.031, z1);
-                scene.add(circleMesh);
+                const w = wallThin + 2 * margin;
+                const h = z1 - z0;
+                drawMarginRectAndCircles(cx, cz, w, h, false, marginMaterial);
             }
         }
     }
@@ -369,6 +342,10 @@ function init() {
     const dificulty = 10;
     const centerCoord = (dificulty - 1) / 2;
     const maze = generateMaze(dificulty, dificulty);
+
+    // Remove a parede superior da célula inicial (entrada) e a parede inferior da célula final (saída)
+    maze[dificulty - 1][0].bottom = false; // entrada canto inferior esquerdo
+    maze[0][dificulty - 1].top = false; // saída canto superior direito
 
     setScene();
     setCamera(centerCoord);
