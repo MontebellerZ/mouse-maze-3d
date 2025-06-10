@@ -172,6 +172,13 @@ function onKeyDown(event) {
     if (code === "KeyS" || code === "ArrowDown") {
         moveBackward = true;
     }
+    if (code === "KeyC") {
+        window.creativeMode = !window.creativeMode;
+        updateMarginsColor();
+    }
+    if (code === "KeyR") {
+        setGame();
+    }
     if (window.creativeMode) {
         if (code === "Space" && window.creativeMode) {
             moveUp = true;
@@ -186,16 +193,9 @@ function onKeyDown(event) {
         if (code === "ControlLeft") {
             moveFast = true;
         }
-    }
-    if (code === "KeyC") {
-        window.creativeMode = !window.creativeMode;
-        updateMarginsColor();
-    }
-    if (code === "KeyR") {
-        setGame();
-    }
-    if (code === "Space" && !window.creativeMode) {
-        tryKickBall();
+        if (code === "Space") {
+            tryKickBall();
+        }
     }
 }
 
